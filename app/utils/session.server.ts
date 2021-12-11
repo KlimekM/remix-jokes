@@ -31,6 +31,13 @@ export async function login({
   return user;
 }
 
+export async function register({ username, password }: LoginForm) {
+  const passwordHash = await bcrypt.hash(password, 10);
+  return db.user.create({
+    data: { username, passwordHash },
+  });
+}
+
 const sessionSecret = process.env.SESSION_SECRET;
 if (!sessionSecret) {
   throw new Error('SESSION_SECRET must be set');
@@ -73,6 +80,31 @@ export async function getUserId(request: Request) {
   const userId = session.get('userId');
   if (!userId || typeof userId !== 'string') return null;
   return userId;
+}
+
+export async function getUser(request: Request) {
+  const userId = await getUserId(request);
+  if (typeof userId !== 'string') {
+    return null;
+  }
+
+  try {
+    const user = await db.user.findUnique({
+      where: { id: userId },
+    });
+    return user;
+  } catch {
+    throw logout(request);
+  }
+}
+
+export async function logout(request: Request) {
+  const session = await storage.getSession(request.headers.get('Cookie'));
+  return redirect('/login', {
+    headers: {
+      'Set-Cookie': await storage.destroySession(session),
+    },
+  });
 }
 
 export async function requireUserId(
